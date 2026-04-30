@@ -1,0 +1,35 @@
+# Virtual environment
+.venv/
+__pycache__/
+
+# Large training/eval files (not needed for app deployment)
+doaj_train.csv
+doaj_test.csv
+
+# Tuning artifacts (not needed for app)
+results/tune_*.npy
+results/*_optimization_history.png
+results/*_param_importance.png
+results/*_contour_*.png
+results/per_category_*.csv
+results/per_category_*.json
+results/per_category_*.png
+results/category_size_vs_accuracy.png
+results/equal_distribution_*.json
+results/equal_distribution_*.png
+results/comparison_table.csv
+results/final_metrics.json
+results/hitrate_comparison.png
+results/execution_time.png
+results/bm25_best_params.json
+results/sbert_best_params.json
+
+# Report files
+*.docx
+*.pdf
+_fyp*.txt
+FYP1*
+FYP2*
+
+# IDE
+.vscode/
