@@ -27,7 +27,7 @@ from utils import nltk_clean
 # ---------- CONFIG ----------
 DATA_DIR = "."
 RESULTS_DIR = "results"
-SCORE_THRESHOLD = 0.05           # cosine similarity threshold (TF-IDF range ~0-1)
+SCORE_THRESHOLD = 0.20           # cosine similarity threshold (TF-IDF range ~0-1)
 MAX_DISPLAY = 10                 # max journals to display
 
 # Default TF-IDF params (Optuna best)
@@ -38,11 +38,173 @@ DEFAULT_PARAMS = {
     "min_df": 5
 }
 
+
+# ---------- CUSTOM CSS ----------
+CUSTOM_CSS = """
+<style>
+    /* Import Google Font */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    /* Global font */
+    html, body, [class*="st-"] {
+        font-family: 'Inter', sans-serif;
+    }
+
+    /* Hero banner */
+    .hero {
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+        border-radius: 16px;
+        padding: 2rem 2.5rem;
+        margin-bottom: 1.5rem;
+        border: 1px solid rgba(255,255,255,0.08);
+    }
+    .hero h1 {
+        font-size: 2.2rem;
+        font-weight: 700;
+        background: linear-gradient(90deg, #e94560, #ff6b6b, #ffa07a);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.3rem;
+    }
+    .hero p {
+        color: #8899aa;
+        font-size: 0.95rem;
+        margin: 0;
+    }
+
+    /* Stat cards row */
+    .stat-row {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    .stat-card {
+        flex: 1;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 12px;
+        padding: 1rem 1.2rem;
+        text-align: center;
+    }
+    .stat-card .num {
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: #e94560;
+    }
+    .stat-card .label {
+        font-size: 0.78rem;
+        color: #8899aa;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* Result card */
+    .result-card {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 12px;
+        padding: 1.2rem 1.5rem;
+        margin-bottom: 0.8rem;
+        transition: border-color 0.2s;
+    }
+    .result-card:hover {
+        border-color: #e94560;
+    }
+    .result-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    .result-title {
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: #f0f0f0;
+    }
+    .result-rank {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #0E1117;
+        background: #e94560;
+        border-radius: 6px;
+        padding: 2px 10px;
+        min-width: 28px;
+        text-align: center;
+    }
+
+    /* Score bar */
+    .score-bar-bg {
+        background: rgba(255,255,255,0.08);
+        border-radius: 6px;
+        height: 8px;
+        margin: 0.5rem 0;
+        overflow: hidden;
+    }
+    .score-bar-fill {
+        height: 100%;
+        border-radius: 6px;
+        background: linear-gradient(90deg, #e94560, #ff6b6b);
+        transition: width 0.5s ease;
+    }
+    .score-text {
+        font-size: 0.82rem;
+        color: #8899aa;
+    }
+
+    /* Meta info */
+    .result-meta {
+        font-size: 0.85rem;
+        color: #7a8a9a;
+        margin-top: 0.3rem;
+    }
+    .result-scope {
+        font-size: 0.83rem;
+        color: #6a7a8a;
+        margin-top: 0.4rem;
+        padding: 0.5rem 0.7rem;
+        background: rgba(255,255,255,0.02);
+        border-radius: 8px;
+        border-left: 3px solid #e94560;
+    }
+
+
+
+    /* Footer */
+    .footer {
+        text-align: center;
+        color: #556677;
+        font-size: 0.8rem;
+        margin-top: 2rem;
+        padding: 1rem 0;
+        border-top: 1px solid rgba(255,255,255,0.06);
+    }
+
+    /* Hide default Streamlit footer */
+    footer {visibility: hidden;}
+
+    /* Adjust button styling */
+    .stButton > button {
+        background: linear-gradient(135deg, #e94560, #c9384e);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        padding: 0.6rem 2rem;
+        font-weight: 600;
+        font-size: 0.95rem;
+        transition: all 0.2s;
+    }
+    .stButton > button:hover {
+        background: linear-gradient(135deg, #ff5a75, #e94560);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 15px rgba(233, 69, 96, 0.3);
+    }
+</style>
+"""
+
 # ---------- CACHED RESOURCES ----------
 @st.cache_data(show_spinner=False)
 def load_docs():
     """Load the normalised journal dataset."""
-    # Try artifacts/docs.csv first, then doaj_normalized.csv, then doaj_train.csv
     for path in ["artifacts/docs.csv", "doaj_normalized.csv", "doaj_train.csv"]:
         full = os.path.join(DATA_DIR, path)
         if os.path.exists(full):
@@ -63,7 +225,6 @@ def load_best_params():
 @st.cache_resource(show_spinner=False)
 def build_tfidf_index(docs_df, params):
     """Build TF-IDF vectoriser and transform all journal texts."""
-    # Build scope text for each journal: title_clean + subjects_clean + keywords_clean + category
     texts = []
     for _, row in docs_df.iterrows():
         parts = []
@@ -144,10 +305,7 @@ def recommend(title, abstract, docs, vectoriser, tfidf_matrix, selected_categori
     # Step 1: Clean title + abstract only (same NLTK pipeline as training data)
     cleaned_query = nltk_clean(build_query_text(title, abstract))
 
-    # Step 2: Resolve category — map coarse selection back to full __primary_cat__ values
-    #   The TF-IDF index contains raw __primary_cat__ (e.g. "Social Sciences: Economic theory.")
-    #   The dropdown shows coarse categories (e.g. "Social Sciences")
-    #   We append the full cat string so the terms match the index vocabulary.
+    # Step 2: Resolve category
     cat_col = next((c for c in ['__primary_cat__', 'category', 'subjects_raw', 'subjects'] if c in docs.columns), None)
     candidate_idx = np.arange(len(docs))
 
@@ -158,7 +316,6 @@ def recommend(title, abstract, docs, vectoriser, tfidf_matrix, selected_categori
         filtered = np.where(mask)[0]
         if filtered.size > 0:
             candidate_idx = filtered
-            # Use the most common full category string to enrich the query
             cat_counts = docs.iloc[filtered][cat_col].astype(str).value_counts()
             top_cat = cat_counts.index[0] if len(cat_counts) > 0 else ""
             if top_cat:
@@ -182,7 +339,8 @@ def recommend(title, abstract, docs, vectoriser, tfidf_matrix, selected_categori
                 'score': score,
                 'subjects_preview': get_subjects_preview(row),
                 'publisher': str(row.get('publisher', "")) if 'publisher' in row else "",
-                'url': str(row.get('url', "")) if 'url' in row else ""
+                'url': str(row.get('url', "")) if 'url' in row else "",
+                'category': str(row.get('__primary_cat__', "")) if '__primary_cat__' in row else ""
             })
 
     results = sorted(results, key=lambda x: x['score'], reverse=True)[:MAX_DISPLAY]
@@ -190,11 +348,14 @@ def recommend(title, abstract, docs, vectoriser, tfidf_matrix, selected_categori
 
 # ---------- STREAMLIT UI ----------
 def main():
-    st.set_page_config(page_title="FlareSearch - Aligning Manuscripts with Suitable Journal", layout="wide")
-    st.markdown("## FlareSearch Journal Finder")
-    st.caption("Powered by TF-IDF with Optuna-optimised hyperparameters")
+    st.set_page_config(
+        page_title="FlareSearch — Journal Finder",
+        page_icon="🔍",
+        layout="wide"
+    )
+    st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
-    # Load data and build index
+    # Load data
     try:
         docs = load_docs()
     except Exception as e:
@@ -206,33 +367,78 @@ def main():
     with st.spinner("Building TF-IDF index (first run only)..."):
         vectoriser, tfidf_matrix = build_tfidf_index(docs, params)
 
-    # Build coarse categories list for dropdown
-    cat_col = next((c for c in ['__primary_cat__', 'category', 'subjects_raw', 'subjects'] if c in docs.columns), None)
+    # -- Hero banner --
+    n_journals = len(docs)
+    cat_col = next((c for c in ['__primary_cat__', 'category'] if c in docs.columns), None)
+    n_cats = docs[cat_col].nunique() if cat_col else 0
+
+    st.markdown(f"""
+    <div class="hero">
+        <h1>🔍 FlareSearch</h1>
+        <p>Find the best journal for your manuscript — powered by Optuna-tuned TF-IDF</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # -- Stat cards --
+    st.markdown(f"""
+    <div class="stat-row">
+        <div class="stat-card">
+            <div class="num">{n_journals:,}</div>
+            <div class="label">Journals Indexed</div>
+        </div>
+        <div class="stat-card">
+            <div class="num">{n_cats}</div>
+            <div class="label">Categories</div>
+        </div>
+        <div class="stat-card">
+            <div class="num">88.84%</div>
+            <div class="label">HitRate@1 Accuracy</div>
+        </div>
+        <div class="stat-card">
+            <div class="num">&lt;1s</div>
+            <div class="label">Query Speed</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # -- Build coarse categories --
     if cat_col:
         coarse = docs[cat_col].astype(str).map(coarse_category)
         available_categories = sorted([c for c in coarse.unique() if c and c.strip()])
     else:
         available_categories = []
 
-    # UI inputs
-    st.markdown("### Manuscript input")
-    title = st.text_input("Title")
-    abstract = st.text_area("Abstract", height=200)
+    # -- Input fields --
+    col_left, col_right = st.columns([2, 1])
 
-    if available_categories:
-        st.markdown("### Optional: choose coarse subject(s) to narrow search")
-        selected_cats = st.multiselect("Subject(s)", options=available_categories)
-        if selected_cats == []:
-            selected_cats = None
-    else:
-        selected_cats = None
-        st.markdown("_No category field available in the dataset._")
+    with col_left:
+        st.markdown("#### 📝 Manuscript Details")
+        title = st.text_input("Title", placeholder="Enter your manuscript title...")
+        abstract = st.text_area("Abstract", height=180,
+                                placeholder="Paste your abstract here for more accurate matching...")
 
-    if st.button("Find matching journals"):
-        if not title.strip() and not abstract.strip():
-            st.warning("Enter title or abstract to search.")
+    with col_right:
+        st.markdown("#### 🏷️ Category Filter (Optional)")
+        if available_categories:
+            selected_cats = st.multiselect(
+                "Narrow by subject",
+                options=available_categories
+            )
+            if not selected_cats:
+                selected_cats = None
         else:
-            with st.spinner("Searching..."):
+            selected_cats = None
+        
+        st.markdown("")
+        st.markdown("")
+        search_clicked = st.button("🔍 Find Matching Journals", use_container_width=True, type="primary")
+
+    # -- Results --
+    if search_clicked:
+        if not title.strip() and not abstract.strip():
+            st.warning("⚠️ Please enter a title or abstract to search.")
+        else:
+            with st.spinner("🔍 Searching journals..."):
                 results = recommend(
                     title=title, abstract=abstract, docs=docs,
                     vectoriser=vectoriser, tfidf_matrix=tfidf_matrix,
@@ -240,22 +446,51 @@ def main():
                 )
 
             if not results:
-                st.info("No suitable journal found. Try clearing category filter or expanding your abstract.")
+                st.info("No suitable journal found. Try clearing the category filter or expanding your abstract.")
             else:
-                st.markdown(f"### Matched journals")
-                for i, r in enumerate(results, start=1):
-                    st.markdown(f"**{i}. {r['journal_title']}** — score: {r['score']:.3f}")
-                    if r['url']:
-                        st.markdown(f"[Link]({r['url']})")
-                    if r['publisher']:
-                        st.markdown(f"*Publisher:* {r['publisher']}")
-                    if r['subjects_preview']:
-                        st.markdown(f"**Scope:** {r['subjects_preview']}")
-                    st.markdown("---")
+                st.markdown(f"#### 📚 Top {len(results)} Matching Journals")
 
-    # Footer
-    st.markdown("<hr>", unsafe_allow_html=True)
-    st.caption("© 2026 — FlareSearch Journal Finder ver 2.0 | TF-IDF engine")
+                for i, r in enumerate(results):
+
+                    # Build URL link
+                    url_html = ""
+                    if r['url'] and r['url'].strip() and r['url'].startswith("http"):
+                        url_html = f' · <a href="{r["url"]}" target="_blank" style="color:#e94560;text-decoration:none;">🔗 Visit Journal</a>'
+
+                    # Publisher
+                    pub_html = f" · 📰 {r['publisher']}" if r['publisher'] else ""
+
+                    # Category badge
+                    cat_html = ""
+                    if r['category']:
+                        cat_display = coarse_category(r['category'])
+                        cat_html = f' <span style="background:rgba(233,69,96,0.15);color:#e94560;padding:2px 8px;border-radius:4px;font-size:0.75rem;">{cat_display}</span>'
+
+                    # Scope
+                    scope_html = ""
+                    if r['subjects_preview']:
+                        scope_html = f'<div class="result-scope">{r["subjects_preview"]}</div>'
+
+                    st.markdown(f"""
+                    <div class="result-card">
+                        <div class="result-header">
+                            <span class="result-title">{r['journal_title']}</span>
+                            <span class="result-rank">#{i+1}</span>
+                        </div>
+                        <div class="score-text">
+                            Score: {r['score']:.4f}{pub_html}{url_html} {cat_html}
+                        </div>
+                        {scope_html}
+                    </div>
+                    """, unsafe_allow_html=True)
+
+    # -- Footer --
+    st.markdown("""
+    <div class="footer">
+        FlareSearch v2.0 · TF-IDF Engine with Optuna-Tuned Hyperparameters · DOAJ Dataset<br>
+        © 2026 Chin Hong An · Universiti Tunku Abdul Rahman
+    </div>
+    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
